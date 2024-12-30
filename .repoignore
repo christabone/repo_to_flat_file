@@ -3,3 +3,16 @@
 *.gitignore
 *README.md
 *.git*
+*.dockerignore
+SEARCH.md
+docker-compose.yml
+.ebignore
+RELEASE-NOTES.md
+LICENSE
+SEARCH.md
+docker
+.ebextensions
+.editorconfig
+FIND.md
+ci-scripts
+.elasticbeanstalk
