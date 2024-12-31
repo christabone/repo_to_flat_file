@@ -1,0 +1,17 @@
+repo: "/home/ctabone/programming/agr_curation/"
+java_source_root: "src/main/java"
+ignore_file: ".repoignore"
+token_count: true
+output: "java_flat_output.txt"
+
+# Depth can be an integer (e.g. 0, 1, 2) or the string "all"
+depth: 1  # or "all"
+
+# The 'files' list can have multiple Java source paths (relative to the 'repo' root).
+files:
+  - "src/main/java/org/alliancegenome/curation_api/dao/GeneDAO.java"
+  - "src/main/java/org/alliancegenome/curation_api/model/entities/Gene.java"
+  - "src/main/java/org/alliancegenome/curation_api/services/GeneService.java"
+  - "src/main/java/org/alliancegenome/curation_api/controllers/crud/GeneCrudController.java"
+  - "src/main/java/org/alliancegenome/curation_api/services/validation/GeneValidator.java"
+  - "src/main/java/org/alliancegenome/curation_api/services/validation/dto/GeneDTOValidator.java"
