@@ -7,6 +7,9 @@ import chardet
 import yaml
 from collections import deque
 
+# Define image extensions just like in the JS version
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
 def parse_ignore_file(ignore_file):
     """
     Read the ignore file line by line, ignoring comments (#) and blank lines.
@@ -56,6 +59,31 @@ def is_text_file(filepath, max_bytes=1024):
         return True
     except Exception:
         return False
+
+def skip_non_text_or_images(filepath, include_images=False):
+    """
+    Return True if the file should be skipped due to:
+      - It's an image file and include_images=False
+      - It's not text (according to chardet) AND not an image
+    Otherwise return False (meaning do NOT skip).
+    """
+    _, ext = os.path.splitext(filepath)
+    ext = ext.lower()
+
+    if ext in IMAGE_EXTENSIONS:
+        # If user doesn't want images, skip them
+        if not include_images:
+            return True
+        else:
+            # If include_images = True, we do not skip,
+            # but BFS for .java imports won't really apply here.
+            return False
+
+    # If not an image, check if it's text
+    if not is_text_file(filepath):
+        return True
+
+    return False
 
 def extract_package_and_imports(file_path):
     """
@@ -111,7 +139,7 @@ def find_file_in_repo(repo_root, relative_path, java_source_root):
     return None
 
 def traverse_java_deps(repo_root, start_files, ignore_patterns, java_source_root,
-                       do_token_count=False, max_depth="all"):
+                       do_token_count=False, include_images=False, max_depth="all"):
     """
     BFS through Java dependencies starting from multiple start_files, with an optional depth limit.
 
@@ -138,7 +166,7 @@ def traverse_java_deps(repo_root, start_files, ignore_patterns, java_source_root
         # fallback if user typed something weird
         max_depth = None
 
-    # Initialize the queue with all start files, each with initial depth=0
+    # Initialize the queue with all start files, each with depth=0
     for sf in start_files:
         queue.append((sf, 0))
 
@@ -161,13 +189,16 @@ def traverse_java_deps(repo_root, start_files, ignore_patterns, java_source_root
             print(f"Skipping file '{relpath}' due to ignore pattern '{matched_pattern}'", file=sys.stderr)
             continue
 
-        # Check if it's text
-        if not is_text_file(current_file):
-            print(f"Skipping binary/unreadable file '{relpath}'", file=sys.stderr)
+        # Check if we should skip non-text/images
+        if skip_non_text_or_images(current_file, include_images):
+            print(f"Skipping binary/unwanted file '{relpath}'", file=sys.stderr)
             continue
 
-        # Optionally accumulate token count
-        if do_token_count:
+        # If it's text, optionally accumulate token count
+        # (We won't do that for images, so this is safe)
+        _, ext = os.path.splitext(current_file)
+        ext = ext.lower()
+        if do_token_count and ext not in IMAGE_EXTENSIONS:
             try:
                 with open(current_file, 'r', encoding='utf-8', errors='replace') as f:
                     file_content = f.read()
@@ -182,7 +213,11 @@ def traverse_java_deps(repo_root, start_files, ignore_patterns, java_source_root
         if max_depth is not None and cur_depth >= max_depth:
             continue
 
-        # Parse and queue up next-level imports
+        # If it's an image, there's no Java imports to parse, so skip BFS expansion
+        if ext in IMAGE_EXTENSIONS:
+            continue
+
+        # Otherwise, parse .java for imports
         _, imports = extract_package_and_imports(current_file)
         for imp in imports:
             possible_rel_path = import_to_filepath(imp)
@@ -194,19 +229,33 @@ def traverse_java_deps(repo_root, start_files, ignore_patterns, java_source_root
 
     return all_files, total_tokens
 
-def create_flat_output(files_list, repo_root, output_file):
+def create_flat_output(files_list, repo_root, output_file, include_images=False):
     """
     Write the contents of all given files to 'output_file', each preceded
     by a header line.
+
+    If it's an image file and include_images=True, write "[Image file skipped]" to avoid binary data.
+    If it's an image file and include_images=False, it won't normally appear in files_list anyway
+    (since we skip it).
     """
     combined_content = []
     for fpath in files_list:
         relpath = os.path.relpath(fpath, repo_root)
+        _, ext = os.path.splitext(fpath)
+        ext = ext.lower()
+
         try:
+            if ext in IMAGE_EXTENSIONS:
+                # Just note that we're skipping binary data
+                combined_content.append(f"===== FILE: {relpath} =====\n[Image file skipped]\n\n")
+                continue
+
+            # Otherwise, read text content
             with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
             header = f"===== FILE: {relpath} =====\n"
             combined_content.append(header + content + "\n")
+
         except Exception as e:
             print(f"Warning: Could not open file {relpath}. Error: {e}", file=sys.stderr)
 
@@ -243,13 +292,16 @@ def main():
     token_count = config.get("token_count", False)
     output_file = config.get("output", "java_flat_output.txt")
 
+    # Add an include_images config option, default false
+    include_images = config.get("include_images", False)
+
+    # Depth can be an integer or "all"
+    depth_setting = config.get("depth", "all")  # default to "all"
+
     start_files = config.get("files", [])
     if not start_files:
         print("Error: 'files' list is empty or not provided in the YAML config.", file=sys.stderr)
         sys.exit(1)
-
-    # Depth can be an integer or "all"
-    depth_setting = config.get("depth", "all")  # default to "all"
 
     # Convert all start files to absolute paths, check they exist
     abs_start_files = []
@@ -274,6 +326,7 @@ def main():
         ignore_patterns=ignore_patterns,
         java_source_root=java_source_root,
         do_token_count=token_count,
+        include_images=include_images,
         max_depth=depth_setting
     )
 
@@ -282,8 +335,8 @@ def main():
     if token_count:
         print(f"Approximate total tokens: {total_tokens}")
 
-    # Create a single flat file with all code
-    create_flat_output(all_files, repo_root, output_file)
+    # Create a single flat file with code (or image-skipped message)
+    create_flat_output(all_files, repo_root, output_file, include_images=include_images)
     print(f"Wrote combined Java contents to '{output_file}'.")
 
 if __name__ == "__main__":

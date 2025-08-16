@@ -1,0 +1,18 @@
+repo: "/home/ctabone/programming/agr_ui/"
+ignore_file: ".repoignore"
+token_count: true
+output: "js_flat_output.txt"
+
+# Include local CSS/SCSS imports in BFS?
+include_css_imports: true
+
+# If false, skip images entirely. If true, BFS includes them as “dependencies”,
+# but they will be printed as "[Image file skipped]" in the final output (to avoid binary data).
+include_images: false
+
+# Depth can be an integer (e.g. 0, 1, 2) or the string "all"
+depth: all  # or "all"
+
+# The 'files' list can have multiple JavaScript source paths (relative to the 'repo' root).
+files:
+  - "src/containers/alzheimersPage/index.js"

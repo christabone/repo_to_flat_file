@@ -4,7 +4,13 @@ ignore_file: ".repoignore"
 token_count: true
 output: "java_flat_output.txt"
 
-# Depth can be an integer (e.g. 0, 1, 2) or the string "all"
+# Include image files in the dependency traversal and flat output.
+# If set to false, image files will be skipped entirely.
+# If set to true, image files will be included as dependencies but their contents
+# will be represented as "[Image file skipped]" in the final output to avoid binary data.
+include_images: false
+
+# Depth can be an integer (e.g., 0, 1, 2) or the string "all"
 depth: 1  # or "all"
 
 # The 'files' list can have multiple Java source paths (relative to the 'repo' root).
